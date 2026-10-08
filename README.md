@@ -29,4 +29,4 @@ are separate; a complete automated installer is not available yet.
 2. Follow [receiver setup](docs/deployment/live-workflows.md) to authorize sources and provision storage.
 3. Send a backup, inspect its arrival, then verify and retain it with writers paused.
 
-[Technical guide](readme-2.md) · [Roadmap](docs/roadmap.md) · [Apache-2.0 license](LICENSE)
+[Whitepaper (PDF)](docs/whitepaper/BackupFabric-Whitepaper.pdf) · [Technical guide](readme-2.md) · [Roadmap](docs/roadmap.md) · [Apache-2.0 license](LICENSE)

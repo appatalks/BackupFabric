@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BackupFabric | Independent Technical Whitepaper</title>
+<style>
+@page { size: A4; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #fff; color: #202a2a; }
+body { font-family: "Baskerville", Georgia, serif; font-size: 11pt; line-height: 1.35; }
+.sheet { width: 210mm; height: 297mm; padding: 19mm 22mm 23mm; position: relative; break-after: page; overflow: visible; }
+.sheet:last-child { break-after: auto; }
+.running, h1, h2, h3, .eyebrow, table, .footer, .metric, .diagram { font-family: "Avenir Next", "Helvetica Neue", sans-serif; }
+.running { display: flex; justify-content: space-between; border-bottom: 1px solid #ced7d5; padding-bottom: 4mm; margin-bottom: 9mm; font-size: 8pt; color: #596866; }
+.running strong { color: #176b59; font-weight: 600; }
+.eyebrow { font-size: 8.5pt; color: #176b59; text-transform: uppercase; letter-spacing: 0; font-weight: 600; }
+h1 { font-size: 44pt; line-height: 1.05; letter-spacing: 0; font-weight: 600; margin: 0 0 7mm; }
+h2 { font-size: 25pt; line-height: 1.15; letter-spacing: 0; font-weight: 500; margin: 2mm 0 6mm; }
+h3 { font-size: 12pt; line-height: 1.3; margin: 6mm 0 2mm; font-weight: 600; color: #176b59; }
+p { margin: 0 0 3.5mm; }
+.lead { font-size: 14pt; line-height: 1.4; }
+.muted { color: #596866; }
+.small { font-size: 9.5pt; line-height: 1.4; }
+.rule { width: 22mm; height: 1.5mm; background: #176b59; margin: 7mm 0; }
+.note { border-left: 2pt solid #a56b2f; padding: 3mm 4mm; margin: 5mm 0; background: #f6f7f6; font-size: 10pt; }
+.footer { position: absolute; left: 22mm; right: 22mm; bottom: 12mm; border-top: 1px solid #ced7d5; padding-top: 3mm; display: flex; justify-content: space-between; gap: 5mm; font-size: 7.5pt; line-height: 1.3; color: #596866; }
+ul, ol { padding-left: 5mm; margin: 2mm 0 4mm; }
+li { margin: 0 0 2mm; }
+table { border-collapse: collapse; width: 100%; font-size: 9pt; line-height: 1.4; margin: 4mm 0; }
+th { text-align: left; background: #edf3f1; color: #176b59; font-weight: 600; }
+th, td { padding: 3mm; border-bottom: 1px solid #ced7d5; vertical-align: top; }
+td:first-child { font-weight: 500; }
+code { font-family: "Menlo", monospace; font-size: 8.5pt; overflow-wrap: anywhere; }
+a { color: #176b59; text-decoration: none; }
+.cover { padding-top: 24mm; }
+.cover .eyebrow { margin-bottom: 24mm; }
+.cover .subtitle { max-width: 140mm; font-size: 22pt; line-height: 1.3; margin-bottom: 9mm; font-family: "Avenir Next", sans-serif; }
+.cover .abstract { max-width: 140mm; font-size: 14pt; margin-bottom: 15mm; }
+.cover-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; border-top: 1px solid #ced7d5; border-bottom: 1px solid #ced7d5; padding: 5mm 0; margin: 8mm 0; font-size: 10pt; }
+.cover-disclaimer { margin-top: 13mm; font-size: 10pt; line-height: 1.45; }
+.diagram { margin: 5mm 0; font-size: 10pt; line-height: 1.35; }
+.sources { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+.box { border: 1px solid #a6bbb4; padding: 4mm; background: #f4f8f6; }
+.box strong { display: block; color: #176b59; margin-bottom: 1mm; }
+.flow { text-align: center; color: #596866; padding: 2mm; font-size: 9pt; }
+.tiers { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+.metric { font-size: 22pt; color: #176b59; font-weight: 500; display: block; }
+.references li { font-size: 9pt; margin-bottom: 2.5mm; overflow-wrap: anywhere; }
+.summary-line { border-top: 1px solid #ced7d5; padding-top: 4mm; margin-top: 5mm; }
+</style>
+</head>
+<body>
+<section class="sheet cover">
+  <div class="eyebrow">Independent technical whitepaper | Version 0.1</div>
+  <h1>BackupFabric</h1>
+  <div class="rule"></div>
+  <div class="subtitle">An independent Linux control plane for isolated backup operations</div>
+  <p class="abstract">Receiving, discovering, comparing, and retaining backup histories from multiple sources, with explicit evidence and controlled recovery workflows.</p>
+  <div class="cover-meta">
+    <div><strong>Audience</strong><br>Platform engineers, infrastructure operators, and security architects</div>
+    <div><strong>Publication date</strong><br>8 October 2026<br>Research and experimental implementation</div>
+  </div>
+  <div class="cover-disclaimer">
+    <p><strong>Independent project.</strong> BackupFabric is not affiliated with, sponsored by, endorsed by, or an official product of GitHub, Inc. No vendor certification or support commitment is implied.</p>
+    <p>GitHub Enterprise Server is discussed as the initial backup producer evaluated in the laboratory. References to vendor documentation identify source behavior; they do not establish support for BackupFabric's experimental receiver topology.</p>
+    <p class="muted">This paper describes the implementation and evidence available on the publication date. BackupFabric remains experimental and is not production-ready.</p>
+  </div>
+  <div class="footer"><span>BackupFabric | Independent technical whitepaper</span><span>01 / 08</span></div>
+</section>
+
+<section class="sheet">
+  <div class="running"><strong>BackupFabric</strong><span>Executive perspective</span></div>
+  <div class="eyebrow">01 | Executive summary</div>
+  <h2>Make backup operations observable.<br>Do not confuse copies with recovery.</h2>
+  <p class="lead">BackupFabric separates the operational work of managing backup histories from the application that creates and restores them.</p>
+  <p>The initial implementation focuses on GitHub Enterprise Server (GHES). GHES remains responsible for producing its native backup format and executing native restoration. BackupFabric provides a Linux-based registry, receiver inventory, operation journal, verification workflow, retained-history copies, and management interface.</p>
+  <p>The problem is not simply transporting files. An operator must know which source a history belongs to, whether a publication is complete, what a comparison establishes, whether a retained copy exists, and what recovery has actually demonstrated. Combining these questions into a single green status creates false confidence.</p>
+  <h3>Three operating principles</h3>
+  <ol>
+    <li><strong>Source isolation.</strong> Credential-to-receiver bindings determine storage access. Source-provided timestamps and paths do not select another source's namespace.</li>
+    <li><strong>Evidence before promotion.</strong> Discovery, comparison, retention, independent protection, and restore qualification are distinct facts. None substitutes for all the others.</li>
+    <li><strong>Explicit operational authority.</strong> Managed operations require approval. Verification and retention require coordinated writers. Restore execution remains manual.</li>
+  </ol>
+  <h3>What the laboratory establishes</h3>
+  <p>Two GHES sources on releases 3.21.6 and 3.21.7 completed controlled backup, delivery, resend, comparison, and retention pipelines. A later GHES 3.21.7 data restore consumed a BackupFabric-retained history and passed repository and service checks.</p>
+  <div class="note"><strong>Interpretation:</strong> this is bounded laboratory evidence, not a general compatibility guarantee, independently protected disaster recovery, or production certification. Broader feature validation and clean-host deployment qualification remain outstanding.</div>
+  <p class="summary-line">The intended value is a clearer, repeatable backup operating model with attributable source histories, visible retention gaps, and a disciplined path toward demonstrated recovery.</p>
+  <div class="footer"><span>Independent project | Experimental implementation</span><span>02 / 08</span></div>
+</section>
+
+<section class="sheet">
+  <div class="running"><strong>BackupFabric</strong><span>System architecture</span></div>
+  <div class="eyebrow">02 | Architecture</div>
+  <h2>One entry point.<br>Separate histories.</h2>
+  <div class="diagram" aria-label="Two sources use distinct keys through one SSH gateway and separate receiver volumes. The control plane reads both volumes and writes separate retained archives.">
+    <div class="sources"><div class="box"><strong>Backup source A</strong>Native backup + approved key A</div><div class="box"><strong>Backup source B</strong>Native backup + approved key B</div></div>
+    <div class="flow">Native archive sessions via SSH port 122</div>
+    <div class="box"><strong>Host SSH gateway + restricted broker</strong>Fixed authenticated key-to-receiver mapping; operator keys have a separate policy</div>
+    <div class="flow">Execution inside the assigned namespace only</div>
+    <div class="tiers"><div class="box"><strong>Receiver A</strong>Only source A's writable incoming volume</div><div class="box"><strong>Receiver B</strong>Only source B's writable incoming volume</div></div>
+    <div class="flow">Read-only receiver mounts into the control plane</div>
+    <div class="box"><strong>BackupFabric control plane</strong>API + GUI + SQLite journal + approved verification and retention</div>
+    <div class="flow">Separate writable source/job archive directories</div>
+    <div class="box"><strong>Local retained histories</strong>Full-history copies for comparison and recovery staging; not immutable storage</div>
+  </div>
+  <h3>Container roles and authority</h3>
+  <p>The current native-push prototype uses Docker Engine for per-source receiver isolation. Each receiver has a read-only root, disabled networking, dropped capabilities, a configured non-root identity, and one writable backup volume. The host broker invokes commands inside the selected container.</p>
+  <p>The control plane does not receive the Docker socket or host broker privileges. It reads receiver data through read-only mounts and writes its catalog and retained copies to separate paths. The Go control plane can run natively; a container-free native-push isolation alternative is not implemented.</p>
+  <div class="note">The documented GHES remote-archive destination is another GHES appliance. BackupFabric's Ubuntu receiver namespaces are an experimental compatibility path outside that documented topology.</div>
+  <div class="footer"><span>Independent project | Architecture, not a vendor-endorsed topology</span><span>03 / 08</span></div>
+</section>
+
+<section class="sheet">
+  <div class="running"><strong>BackupFabric</strong><span>Operations and evidence</span></div>
+  <div class="eyebrow">03 | Workflow</div>
+  <h2>A journal that describes<br>what happened, not what was assumed.</h2>
+  <table>
+    <thead><tr><th style="width:30%">Operation</th><th>Behavior and evidence boundary</th></tr></thead>
+    <tbody>
+      <tr><td>Create backup and receive</td><td>Requests a native source backup, awaits archive completion, and checks that receiver publication matches source metadata. Does not infer content integrity or restore qualification.</td></tr>
+      <tr><td>Receive existing backup</td><td>Sends source current to the assigned receiver. Does not create a new source snapshot; an identical resend may reuse the same timestamp.</td></tr>
+      <tr><td>Discover snapshots</td><td>Validates bounded timestamp/version/UUID metadata and publication markers. Records one durable observation per source/timestamp, not a witnessed transfer event.</td></tr>
+      <tr><td>Verify received data</td><td>Compares source and receiver checksums and archive metadata with stable publication checks. Requires paused writers and does not prove source cleanliness.</td></tr>
+      <tr><td>Retain complete history</td><td>Copies a coordinated history to a fresh source/job directory, preserving required metadata and comparing the result. Failure does not publish a usable collection.</td></tr>
+      <tr><td>Prepare restore target</td><td>Copies retained history to a separately registered compatible GHES target with an empty backup root. Does not run native restore or format disks.</td></tr>
+    </tbody>
+  </table>
+  <h3>Publication and retention detection</h3>
+  <p>Native metadata reads are bounded and reject malformed versions, wrong source identities, symlink/FIFO metadata, and incomplete publications. Reconciliation occurs at startup, GUI refresh, native preflight, and operation pre-checks; an API/CLI scan is also available.</p>
+  <p>Repeated and concurrent scans are idempotent. An observation's timestamp records discovery, not transfer completion. Separate resends of one unchanged snapshot are not individually audited. There is no independent always-on filesystem watcher.</p>
+  <p>The inventory distinguishes pending collection from retained, unqualified histories using completed collection evidence and matching archived metadata. A full-history collection can include several native timestamps and versions.</p>
+  <div class="note">Writer quiescence is still an operator attestation. Stable metadata or an absent marker alone cannot coordinate every independent backup, prune, or transfer writer.</div>
+  <div class="footer"><span>Independent project | Discovery is not transfer proof</span><span>04 / 08</span></div>
+</section>
+
+<section class="sheet">
+  <div class="running"><strong>BackupFabric</strong><span>Security and protection boundaries</span></div>
+  <div class="eyebrow">04 | Security model</div>
+  <h2>Isolation is necessary.<br>Immutability is a different property.</h2>
+  <p class="lead">A compromised source must not obtain authority over another source. It must also not be mistaken for a trusted producer simply because its backup can be copied accurately.</p>
+  <p>Approved incoming keys select fixed receiver namespaces. Tested source sessions could not access host data, control credentials, host sudo, the Docker socket, or another receiver root. Forwarding to the management API was denied for backup-source keys.</p>
+  <p>These controls have a specific limit: the broker permits shell execution inside the assigned receiver, whose incoming volume is writable. A stolen source key can therefore damage that source's own incoming history. No broader container-escape or adversarial security certification has been completed.</p>
+  <table>
+    <thead><tr><th style="width:28%">Storage tier</th><th>Current protection and limitation</th></tr></thead>
+    <tbody>
+      <tr><td>Incoming history</td><td>Per-source namespace isolation. Writable by the authorized source identity; not immutable.</td></tr>
+      <tr><td>Local retained history</td><td>Not mounted into source receiver sessions. Writable by the control plane and within the same host/storage failure boundary.</td></tr>
+      <tr><td>Independent recovery store</td><td>Proposed only. No retention-lock backend, separated storage authority, or independently protected-success state is implemented.</td></tr>
+    </tbody>
+  </table>
+  <h3>Management access</h3>
+  <p>The current API is unauthenticated and restricted to loopback. Operators access it through a trusted SSH tunnel on the existing port 122. Host/origin/JSON guards reduce browser request risks but do not replace authentication, authorization, or trusted-operator controls.</p>
+  <h3>Design rules</h3>
+  <ul>
+    <li>Keep source backup keys distinct from reverse-control credentials and operator keys.</li>
+    <li>Pin source SSH identities; do not enroll unknown keys automatically.</li>
+    <li>Do not relax ownership, link, ACL, or extended-attribute checks to make a failed transfer appear successful.</li>
+    <li>Retain earlier recovery evidence when new incoming content is suspect. Checksums demonstrate copy fidelity, not malware detection.</li>
+  </ul>
+  <div class="footer"><span>Independent project | No immutable-storage guarantee</span><span>05 / 08</span></div>
+</section>
+
+<section class="sheet">
+  <div class="running"><strong>BackupFabric</strong><span>Deployment and extensibility</span></div>
+  <div class="eyebrow">05 | Deployment</div>
+  <h2>Ubuntu-first.<br>Installation inputs, not lab identities.</h2>
+  <p>Ubuntu 24.04 LTS is the recommended host baseline. The project aims for broader Linux deployment, but distribution, architecture, filesystem, kernel, service-manager, and security-policy combinations require qualification.</p>
+  <h3>Current deployment requirements</h3>
+  <ul>
+    <li>Docker Engine for receiver isolation; Compose for the control-plane quick start.</li>
+    <li>Persistent, adequately sized storage with the required link and metadata support.</li>
+    <li>Approved identities, pinned keys, isolated routes, compatible ownership, and trusted operator SSH access.</li>
+  </ul>
+  <p>Runtime assets contain no operational keys or real appliance bindings. Generic configurations and external fixtures supply installation inputs. Image build arguments and fixed broker routes configure UID/GID; unsupported ownership fails closed.</p>
+  <h3>Release and onboarding work remains</h3>
+  <p>The repository quick start launches the control plane, not a fully provisioned backup service. Receiver setup and persistent mounts remain separate. A guided installer, released multi-architecture packages, automatic trusted onboarding, and broader Linux certification are planned.</p>
+  <h3>Version handling</h3>
+  <p>Versions are recorded per snapshot; upgrades do not rewrite earlier version evidence. Managed checks match source/receiver metadata. Version parsing is not format certification, and restore compatibility still requires operator confirmation.</p>
+  <h3>Beyond GHES</h3>
+  <p>A generic adapter could catalog LAMP database dumps and application files using approved source bindings, isolated namespaces, bounded manifests, checksums, and explicit completion. Producers remain responsible for consistent backups and application-specific restoration.</p>
+  <div class="note">Generic ingestion is proposed, not implemented. Arbitrary files pushed to a shared path must not be treated as completed backups or disguised with fake GHES metadata.</div>
+  <div class="footer"><span>Independent project | Portability is a qualification goal</span><span>06 / 08</span></div>
+</section>
+
+<section class="sheet">
+  <div class="running"><strong>BackupFabric</strong><span>Laboratory evidence</span></div>
+  <div class="eyebrow">06 | Demonstrated behavior</div>
+  <h2>Live transfers.<br>A bounded restore rehearsal.</h2>
+  <table>
+    <thead><tr><th style="width:30%">Test area</th><th>Recorded outcome</th></tr></thead>
+    <tbody>
+      <tr><td>Two-source pipelines</td><td>GHES 3.21.6 and 3.21.7 each completed fresh backup, archive delivery, explicit resend, comparison, and full-history retention: eight real managed operations.</td></tr>
+      <tr><td>Isolation</td><td>Actual source-key host-path and forwarding denials; harmless same-path fixtures remained separate. Portable broker tests also exercised concurrent writes and links.</td></tr>
+      <tr><td>Integrity and history</td><td>Newest snapshots passed checksum/archive-metadata comparisons, including dry-run extra-entry checks. Older entries were recognized inside retained full histories.</td></tr>
+      <tr><td>Durability of records</td><td>Controlled service restart preserved 22 journal records, settings, retained-current references, and idempotent discovery for the recorded run.</td></tr>
+      <tr><td>Regression checks</td><td>Linux tests covered API guards, failed/changed transfers, metadata safety, ownership constraints, concurrency, retention lookup, and fixture-based restore staging.</td></tr>
+    </tbody>
+  </table>
+  <h3>Retained-history restore</h3>
+  <p>A separate approved rehearsal copied a retained source history back to its original GHES 3.21.7 appliance. The original local backup tree was preserved. Staging used metadata-preserving copy and comparison before manual native restoration without the configuration flag.</p>
+  <p>The native restore exited successfully. Its reported runtime was 1,580 seconds, approximately 26 minutes 20 seconds. This excludes portions of preparation and subsequent validation and is not a recovery-time objective or performance benchmark.</p>
+  <p>Twenty-one repositories matched the normalized pre-restore reference digest and passed object integrity checks. Restore markers cleared, services were healthy, maintenance was removed, and local HTTP/API checks succeeded. BackupFabric was restarted afterward.</p>
+  <div class="note">This was a same-appliance data restore, not a fresh-host disaster-recovery exercise. Authenticated users/organizations, external Actions data, runner recovery, and cross-version/cross-appliance restoration were not fully validated. No automatic restore-qualified catalog state was assigned.</div>
+  <div class="footer"><span>Independent project | Results are scoped, not benchmarks</span><span>07 / 08</span></div>
+</section>
+
+<section class="sheet">
+  <div class="running"><strong>BackupFabric</strong><span>Boundaries and next steps</span></div>
+  <div class="eyebrow">07 | Qualification agenda</div>
+  <h2>What remains before<br>production adoption.</h2>
+  <ul>
+    <li><strong>Independent protection:</strong> select and validate a recovery store with separate writer, retention-administrator, and recovery-reader authority.</li>
+    <li><strong>Recovery breadth:</strong> execute seeded fresh-target rehearsals, preserve database dependencies, measure complete recovery time/point, and validate authenticated application behavior.</li>
+    <li><strong>Operational resilience:</strong> prove persistent mounts, boot ordering, host-loss recovery, catalog reconstruction, interrupt/retry handling, and realistic concurrent-source workloads.</li>
+    <li><strong>Security readiness:</strong> complete image and broker review, least-privilege administration, API authentication/authorization, and adversarial testing. An earlier base-image diagnostic remains unresolved.</li>
+    <li><strong>Deployment and formats:</strong> deliver safe initialization/release packaging, qualify Linux architectures/distributions, and implement generic producer adapters without weakening native validation.</li>
+  </ul>
+  <p>Platform snapshots and native-push collection remain complementary. The current provider adapter generates development references only; it does not capture real storage snapshots. Filesystem-compatible replication, independent retention, and a successful restore are separate obligations.</p>
+  <h3>Public references</h3>
+  <ol class="references">
+    <li>BackupFabric source and technical documentation.<br><a href="https://github.com/appatalks/BackupFabric">github.com/appatalks/BackupFabric</a></li>
+    <li>GitHub documentation: Configuring remote archives for backups.<br><a href="https://docs.github.com/en/enterprise-server@3.21/admin/backing-up-and-restoring-your-instance/configuring-remote-archives-for-backups">GHES 3.21 remote archive documentation</a></li>
+    <li>GitHub documentation: Understanding the snapshot file structure.<br><a href="https://docs.github.com/en/enterprise-server@3.21/admin/backing-up-and-restoring-your-instance/understanding-the-snapshot-file-structure">GHES 3.21 snapshot structure</a></li>
+    <li>GitHub documentation: Restoring from a backup.<br><a href="https://docs.github.com/en/enterprise-server@3.21/admin/backing-up-and-restoring-your-instance/restoring-from-a-backup">GHES 3.21 restore procedure</a></li>
+    <li>GitHub documentation: Restoring with GitHub Actions enabled.<br><a href="https://docs.github.com/en/enterprise-server@3.21/admin/backing-up-and-restoring-your-instance/restoring-with-github-actions-enabled">External Actions storage and recovery prerequisites</a></li>
+  </ol>
+  <p class="small muted">Public documentation was consulted for producer behavior. External Actions logs, artifacts, and blobs require separate coverage. Repository lab records underpin this paper's test claims; they are not an independent audit or vendor certification.</p>
+  <p class="small summary-line"><strong>Legal and attribution:</strong> BackupFabric is an independent Apache-2.0 project. GitHub and GitHub Enterprise Server are trademarks of their respective owner. Mention of those products does not imply affiliation, sponsorship, endorsement, or an official support relationship.</p>
+  <div class="footer"><span>BackupFabric | Version 0.1 | 8 October 2026</span><span>08 / 08</span></div>
+</section>
+</body>
+</html>
