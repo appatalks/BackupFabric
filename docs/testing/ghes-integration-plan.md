@@ -811,3 +811,72 @@ and malicious-content detection were not established by this run. Source-key
 isolation does not make its own writable incoming history immutable. The result
 is a validated current receiving/verification/retention pipeline, not complete
 production or disaster-recovery qualification.
+
+## Approved source-A retained-copy restore: 2026-10-08
+
+The operator explicitly confirmed source A as the target, authorized data
+overwrite, selected its retained `20261008T203856` / `v3.21.7` snapshot, and
+selected restore without `-c`. This is a manual lab exception: the control-plane
+guard against staging back onto a registered source was not relaxed.
+
+Read-only preflight confirmed target GHES 3.21.7, dedicated ext4 backup disk,
+approximately 465 GiB available, no replication flag, no active backup/archive,
+and no identified backup schedule/timer. Actions was already enabled; existing
+configuration was retained rather than reconfigured. External Actions data
+and runner operation are not qualified by this rehearsal.
+
+Maintenance was enabled. Because the backup-disk parent is root-owned, sudo
+was used only to create the selected sibling staging directory and publish
+it by rename. The retained full history was copied with `-aHAX --numeric-ids`
+and passed checksum/metadata/extra-entry comparison in explicit dry-run mode.
+It contained three timestamps, 7,914 regular files, and one current symlink;
+logical size was approximately 4.28 GB with hard-link deduplication preserved.
+
+The control plane was stopped with no active job, preventing GUI-triggered
+writes during the manual restore. Source-local original history was preserved
+at `/data/backup/data.before-backupfabric-restore-20261008T203856`; the verified
+retained copy was renamed to `/data/backup/data`. No volume was formatted or
+history deleted, and the recovery copy on BackupFabric stayed unchanged.
+
+`ghe-restore -f -s 20261008T203856` was invoked on the confirmed target at
+21:01:33 UTC. Output reported standalone restore, binary MySQL, MSSQL/Actions,
+Redis, repositories, Pages, storage, and other native components, then data
+restoration complete at 21:05:00 UTC followed by appliance configuration.
+The native workflow restores secrets, UUID, and authorized SSH keys even
+without `-c`; omitting that flag does not mean all authentication data is
+left untouched. It warned about self-hosted Actions runner reconfiguration
+and missing Gist backup. No private secret contents were retrieved.
+
+Repository checks after data restoration found 21 repositories, matching the
+baseline and retained snapshot. The normalized relative-path/reference digest
+was `182c5ff4b8c2a33cb396096301edc1881aa3ecb1ba43a666ef8cfb001f5d5305`
+before/staged/after, and all 21 passed `git fsck --full --no-reflogs`.
+
+At the latest observation, native configuration was still running, Nomad jobs
+were being brought up, SSH remained available, maintenance was still enabled,
+and the control plane remained paused. The restore log had zero ERROR/FATAL
+matches. This entry records progress, not terminal restore success or
+restore-qualified status; final service and native exit checks remain pending.
+
+### Terminal restore result and service validation
+
+The native command completed at 21:28:11 UTC with exit status 0, reporting a
+1,580-second runtime. It released the Replication Controller restore fence,
+restarted cron, restored SSH host keys, and cleaned up the restore marker.
+The data-only native path also clears GitHub Connect settings; no claim is
+made that omitting `-c` preserves every authentication/integration setting.
+
+Post-completion checks confirmed no restore/backup marker, active cron/Nomad/
+Consul/Docker, and passing web health. Maintenance was unset only after these
+checks. Local HTTPS `/status` returned 200, and `/api/v3/meta` reported 3.21.7.
+The original local backup tree remained preserved, and the control-plane
+container was restarted and returned health/status OK. No additional backup,
+transfer, pruning, or deletion was initiated during final validation.
+
+This demonstrates one successful same-appliance GHES 3.21.7 native data restore
+from a BackupFabric-retained history, including the earlier 21-repository
+reference/object checks. It does not establish full production qualification,
+authenticated user/org validation, external Actions data or runner recovery,
+cross-appliance/version restoration, or independent-host disaster recovery.
+No automatic restore-qualified catalog state was assigned. Operators should
+review restored settings and validate authenticated application workflows.

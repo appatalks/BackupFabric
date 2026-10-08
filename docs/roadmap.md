@@ -10,6 +10,18 @@
 - Experimental dedicated-receiver SSH/rsync workflows with explicit approvals
 - Durable live operation journal and fail-closed ownership checks
 
+## Generic backup producers
+
+- Add format-specific discovery/verification adapters alongside GHES, rather
+	than requiring other applications to create fake GHES metadata.
+- Bind trusted producer credentials to isolated receiver roots. Define a
+	bounded source/format/timestamp/checksum manifest and completion protocol.
+- Catalog and retain application-consistent database/file backups supplied by
+	producer tooling; application-specific restore and qualification stay separate.
+
+Generic LAMP/server ingestion is proposed, not implemented. Arbitrary file
+uploads to a shared backup root must not be accepted as complete backups.
+
 ## Portable deployment
 
 Recommended baseline: Ubuntu 24.04 LTS. The initial packaging goal is Linux
