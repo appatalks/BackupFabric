@@ -9,12 +9,15 @@ import (
 )
 
 type Endpoint struct {
-	ApplianceID string `json:"appliance_id"`
-	Role        string `json:"role"`
-	Host        string `json:"host"`
-	Port        int    `json:"port"`
-	KeyRef      string `json:"key_ref"`
-	ReceiverID  string `json:"receiver_id,omitempty"`
+	ApplianceID      string `json:"appliance_id"`
+	Role             string `json:"role"`
+	Host             string `json:"host"`
+	Port             int    `json:"port"`
+	KeyRef           string `json:"key_ref"`
+	ReceiverID       string `json:"receiver_id,omitempty"`
+	CollectionMode   string `json:"collection_mode,omitempty"`
+	NativeRoute      string `json:"native_route,omitempty"`
+	NativeSourceUUID string `json:"native_source_uuid,omitempty"`
 }
 
 type Settings struct {
@@ -34,13 +37,14 @@ type Request struct {
 }
 
 type Job struct {
-	ID        string    `json:"id"`
-	Request   Request   `json:"request"`
-	State     string    `json:"state"`
-	Phase     string    `json:"phase"`
-	Message   string    `json:"message"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID             string          `json:"id"`
+	Request        Request         `json:"request"`
+	State          string          `json:"state"`
+	Phase          string          `json:"phase"`
+	Message        string          `json:"message"`
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
+	NativeSnapshot *NativeSnapshot `json:"native_snapshot,omitempty"`
 }
 
 type Preflight struct {
@@ -73,10 +77,22 @@ func ValidateEndpoint(e Endpoint) error {
 		return fmt.Errorf("key reference must be a simple secret filename without an extension")
 	}
 	if e.Role == "source" {
+		if e.CollectionMode == "native_push" {
+			if e.ReceiverID != "" || e.Port != 122 {
+				return fmt.Errorf("native push requires port 122 and no dedicated receiver mapping")
+			}
+			return nil
+		}
+		if e.CollectionMode != "" {
+			return fmt.Errorf("unknown collection mode")
+		}
+		if e.NativeRoute != "" || e.NativeSourceUUID != "" {
+			return fmt.Errorf("native binding requires native push mode")
+		}
 		if !idPattern.MatchString(e.ReceiverID) || !strings.HasPrefix(e.ReceiverID, "app_") || e.ReceiverID == e.ApplianceID {
 			return fmt.Errorf("source requires a different registered receiver")
 		}
-	} else if e.ReceiverID != "" {
+	} else if e.ReceiverID != "" || e.CollectionMode != "" || e.NativeRoute != "" || e.NativeSourceUUID != "" {
 		return fmt.Errorf("only a source can specify a receiver")
 	}
 	return nil

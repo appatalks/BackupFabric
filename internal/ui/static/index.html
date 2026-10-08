@@ -24,89 +24,76 @@
     </section>
     <nav aria-label="Management workflows" class="tabs">
       <button data-tab="overview" aria-pressed="true">Overview</button>
-      <button data-tab="setup" aria-pressed="false">Appliances &amp; SSH</button>
-      <button data-tab="backup" aria-pressed="false">Backup &amp; collection</button>
-      <button data-tab="restore" aria-pressed="false">Restore staging</button>
+      <button data-tab="setup" aria-pressed="false">Appliances &amp; topology</button>
+      <button data-tab="backup" aria-pressed="false">Backup operations</button>
+      <button data-tab="restore" aria-pressed="false">Prepare restore target</button>
       <button data-tab="settings" aria-pressed="false">Settings</button>
     </nav>
     <div id="live-warning" class="warning-box"></div>
     <div data-panel="overview">
     <section class="panel">
       <div class="panel-title">
-        <div><span class="eyebrow">SOURCES</span><h2>Registered appliances</h2></div>
-        <button id="refresh">Refresh</button>
-      </div>
-      <div id="appliances" class="table-wrap"></div>
-    </section>
-    <section class="panel">
-      <div class="panel-title">
-        <div><span class="eyebrow">CATALOG</span><h2>Backup inventory</h2></div>
+        <div><span class="eyebrow">CATALOG</span><h2>Storage-provider snapshots</h2></div>
       </div>
       <div id="backups" class="table-wrap"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-title"><div><span class="eyebrow">NATIVE PUSH</span><h2>Received snapshots</h2></div></div>
+      <div id="native-snapshots" class="table-wrap"></div>
     </section>
     </div>
     <div data-panel="setup" hidden>
       <section class="panel">
-        <h2>Register an appliance</h2>
-        <p>Register each source, its dedicated GHES receiver, and each restore target separately. Configure native remote archives on GHES using GitHub's documentation.</p>
-        <form id="register-form">
-          <label>Name<input name="name" required maxlength="63" placeholder="receiver-a"></label>
-          <label>Hostname / IPv4<input name="hostname" required placeholder="receiver-a.example.com"></label>
-          <label>Dedicated volume identifier<input name="volume_id" required placeholder="receiver-volume-a"></label>
-          <label>GHES appliance UUID (optional)<input name="appliance_uuid"></label>
-          <button type="submit">Register appliance</button>
-        </form>
+        <div class="panel-title">
+          <h2>Registered appliances</h2>
+          <button id="refresh" type="button">Refresh inventory</button>
+        </div>
+        <div id="appliances" class="table-wrap"></div>
       </section>
       <section class="panel">
-        <h2>Configure SSH and topology</h2>
-        <p>Register the receiver's SSH profile first, then map its source. Each receiver may belong to only one source. Keys and independently verified host keys must be mounted by the server administrator; never paste private keys here.</p>
-        <form id="endpoint-form">
-          <label>Registered appliance<select name="appliance_id" id="endpoint-appliance" required></select></label>
-          <label>Role<select name="role" id="endpoint-role"><option value="receiver">Dedicated receiver</option><option value="source">Source</option><option value="restore">Restore target</option></select></label>
-          <label>SSH port<input name="port" type="number" min="1" max="65535" value="122" required></label>
-          <label>SSH key reference<input name="key_ref" required pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,63}" placeholder="receiver_a"></label>
-          <label>Dedicated receiver (sources only)<select name="receiver_id" id="endpoint-receiver"></select></label>
-          <button type="submit">Save SSH profile</button>
-        </form>
-        <p>Login is fixed to <code>admin</code>. Host, role, and receiver mapping cannot be rebound after registration. No sudo wrapper or GHES configuration modifications are performed.</p>
+        <h2>Backup topology</h2>
+        <div id="topology" class="table-wrap"></div>
+        <p class="warning-box">Native-push enrollment is experimental. Authorized receiver routes and source control access currently require administrator provisioning.</p>
       </section>
       <section class="panel">
         <h2>Connection and storage preflight</h2>
         <form id="preflight-form">
           <label>SSH endpoint<select name="endpoint_id" id="preflight-endpoint" required></select></label>
-          <button type="submit">Run read-only checks</button>
+          <button type="submit">Check source connection</button>
         </form>
         <pre id="preflight-result" aria-live="polite">No checks run yet.</pre>
       </section>
     </div>
     <div data-panel="backup" hidden>
       <section class="panel">
-        <h2>Native backup / receiver collection</h2>
-        <p>Run a backup on the source, then separately collect its receiver after native remote synchronization completes. BackupFabric cannot currently prove remote-sync completion.</p>
+        <h2>Backup operations</h2>
+        <p>Restore qualification remains unverified. Checksum verification and collection require paused source and receiver writers.</p>
         <form id="backup-form">
           <label>Source<select name="source_id" id="backup-source" required></select></label>
-          <label>Action<select name="action" id="backup-action"><option value="backup">Run native ghe-backup</option><option value="collect">Collect complete receiver history using rsync</option></select></label>
-          <label class="check"><input name="quiesced" type="checkbox"> For collection: I confirmed native receiver sync completed and paused source backup/pruning and receiver writers for the whole transfer.</label>
+          <label>Operation<select name="action" id="backup-action"><option value="archive">Receive latest existing backup</option><option value="backup">Create new backup and receive it</option><option value="verify">Verify latest received backup</option><option value="collect">Save retained copy of received history</option></select></label>
+          <div id="backup-context" class="operation-context" aria-live="polite"></div>
+          <label class="check" id="backup-quiesced"><input name="quiesced" type="checkbox"> Source backup/pruning and receiver writers are paused; remote synchronization is complete.</label>
           <label>Type the approval phrase shown below<input name="confirmation" required autocomplete="off"></label>
           <code id="backup-approval"></code>
-          <button type="submit">Approve and start</button>
+          <button type="submit" id="backup-submit">Receive existing backup</button>
         </form>
       </section>
     </div>
     <div data-panel="restore" hidden>
       <section class="panel">
-        <h2>Restore staging wizard</h2>
-        <p>This transfers the complete retained history to an empty target backup root. It does not execute <code>ghe-restore</code> or overwrite an existing history.</p>
+        <h2>Prepare a separate GHES restore target</h2>
+        <p class="warning-box">No native restore will run. Existing target backup history must be empty; the BackupFabric receiver cannot be the restore target.</p>
+        <div id="restore-topology" class="operation-context" aria-live="polite"></div>
         <form id="restore-form">
           <label>1. Source<select name="source_id" id="restore-source" required></select></label>
-          <label>2. Completed collection<select name="collection_id" id="restore-collection" required></select></label>
+          <label>2. Retained history<select name="collection_id" id="restore-collection" required></select></label>
           <label>3. Native restore timestamp<input name="timestamp" id="restore-timestamp" required pattern="[0-9]{8}T[0-9]{6}" placeholder="20261008T010203"></label>
           <label>4. Dedicated restore target<select name="target_id" id="restore-target" required></select></label>
           <label class="check"><input name="quiesced" type="checkbox" required> Target backup, pruning, remote-sync and restore writers are disabled for staging. The mounted backup root is empty.</label>
           <label class="check"><input name="compatible_target" type="checkbox" required> I checked source/target GHES version compatibility and authorize experimental rsync staging.</label>
           <label>5. Type the target approval phrase<input name="confirmation" required autocomplete="off"></label>
           <code id="restore-approval"></code>
-          <button type="submit">Preflight, transfer, verify &amp; stage</button>
+          <button type="submit">Copy retained history to restore target</button>
         </form>
         <p>Do not initialize/format the target disk. After staging, follow GitHub's native restore procedure and record a full restore rehearsal. Transfer checks are not recoverability checks.</p>
       </section>

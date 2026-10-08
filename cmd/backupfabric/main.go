@@ -73,7 +73,7 @@ commands:
   backups collect
   storage inspect
   diagnostics
-  live endpoints|settings|jobs|preflight|run
+	live endpoints|settings|jobs|snapshots|reconcile|preflight|run
   version`)
 }
 
@@ -98,7 +98,9 @@ func liveCommands(args []string) error {
 	method, path := http.MethodGet, "/api/v1/live/"+args[0]
 	var input any
 	switch args[0] {
-	case "endpoints", "settings", "jobs":
+	case "endpoints", "settings", "jobs", "snapshots":
+	case "reconcile":
+		method, input = http.MethodPost, struct{}{}
 	case "preflight":
 		if *endpoint == "" {
 			return fmt.Errorf("--endpoint is required")
@@ -132,6 +134,7 @@ func serve(args []string) error {
 	databasePath := flags.String("database", "./var/backupfabric.db", "SQLite catalog path")
 	archiveRoot := flags.String("archive-root", "/var/lib/backupfabric/archives", "isolated receiver collection root (absolute path)")
 	secretsDir := flags.String("ssh-secrets", "/run/secrets/backupfabric", "read-only SSH key and known_hosts directory")
+	nativeReceivers := flags.String("native-receivers", "", "startup-only native source/receiver configuration JSON (experimental)")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -167,6 +170,18 @@ func serve(args []string) error {
 		return err
 	}
 	defer liveService.Close()
+	if *nativeReceivers != "" {
+		if err := liveService.ConfigureNativeReceivers(*nativeReceivers); err != nil {
+			return fmt.Errorf("configure native receivers: %w", err)
+		}
+		result, err := liveService.ReconcileNativeSnapshots(context.Background())
+		if err != nil {
+			return fmt.Errorf("reconcile native receivers: %w", err)
+		}
+		for _, problem := range result.Problems {
+			logger.Warn("native discovery requires inspection", "problem", problem)
+		}
+	}
 	server := &http.Server{
 		Addr:              *listenAddress,
 		Handler:           api.New(c, service, snapshotProvider.Name(), logger, liveService),

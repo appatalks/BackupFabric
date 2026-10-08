@@ -25,7 +25,7 @@ main { padding: 0 24px 60px; }
 .summary strong { font-size: 2.2rem; color: var(--accent); }
 .summary span { color: var(--muted); font-size: .85rem; }
 .panel { padding: 22px; margin-top: 14px; }
-.panel-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.panel-title { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; margin-bottom: 18px; }
 button { background: transparent; border: 1px solid var(--line); color: var(--text); border-radius: 7px; padding: 8px 13px; cursor: pointer; }
 button:hover { border-color: var(--accent); }
 button:disabled { opacity: .5; cursor: not-allowed; }
@@ -51,9 +51,10 @@ th { color: var(--muted); font-weight: 500; }
 code { color: #b8d6cb; }
 .state { color: var(--accent); }
 .empty { padding: 22px 0; color: var(--muted); }
+.operation-context { border-left: 3px solid var(--accent); padding: 12px 14px; color: var(--text); overflow-wrap: anywhere; white-space: pre-line; line-height: 1.6; }
 .warning { text-align: center; margin-top: 26px; font-size: .82rem; }
 @media (max-width: 680px) {
-  header { align-items: start; padding-top: 36px; }
+  header { flex-direction: column; gap: 12px; align-items: start; padding-top: 36px; }
   header p { max-width: 240px; }
   .summary { grid-template-columns: 1fr; }
 }

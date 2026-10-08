@@ -1,0 +1,2 @@
+#!/bin/sh
+printf '%s\n' 'BackupFabric isolated lab receiver (not GHES; experimental native push)'

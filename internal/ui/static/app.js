@@ -2,7 +2,7 @@ const escapeHTML = (value) => String(value ?? "").replace(
   /[&<>"']/g,
   (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char],
 );
-let state = { appliances: [], endpoints: [], jobs: [] };
+let state = { appliances: [], endpoints: [], jobs: [], snapshots: [] };
 let refreshing = false;
 let liveEnabled = false;
 
@@ -38,10 +38,13 @@ function label(id) {
   return state.appliances.find((a) => a.id === id)?.name || id;
 }
 
+function operationLabel(action) {
+  return ({ backup: "Create backup", archive: "Receive existing backup", verify: "Verify received backup", collect: "Save retained history",
+    stage: "Prepare restore target", discover: "Snapshot discovered" })[action] || action;
+}
+
 function workflowOptions() {
-  selectOptions("endpoint-appliance", state.appliances.map((a) => [a.id, a.name]));
   const endpoints = (role) => state.endpoints.filter((e) => e.role === role).map((e) => [e.appliance_id, label(e.appliance_id)]);
-  selectOptions("endpoint-receiver", endpoints("receiver"));
   selectOptions("backup-source", endpoints("source"));
   selectOptions("restore-source", endpoints("source"));
   selectOptions("restore-target", endpoints("restore"));
@@ -55,14 +58,39 @@ function collectionOptions() {
   selectOptions("restore-collection", state.jobs
     .filter((j) => j.state === "collected_unverified" && j.request.source_id === source)
     .map((j) => [j.id, `${j.request.timestamp} · ${j.id}`]));
+  const target = document.querySelector("#restore-target").value;
+  document.querySelector("#restore-topology").textContent = `${source ? label(source) : "Source"} retained history → ${target ? label(target) : "Separate GHES restore target"}`;
 }
 
 function approvals() {
+  const endpoint = state.endpoints.find((e) => e.appliance_id === document.querySelector("#backup-source").value);
+  const native = endpoint?.collection_mode === "native_push";
+  ["archive", "verify"].forEach((action) => {
+    document.querySelector(`#backup-action option[value="${action}"]`).disabled = !native;
+  });
+  if (endpoint && !native && ["archive", "verify"].includes(document.querySelector("#backup-action").value)) {
+    document.querySelector("#backup-action").value = "backup";
+  }
   const action = document.querySelector("#backup-action").value.toUpperCase();
   const source = document.querySelector("#backup-source").value;
+  const selected = state.snapshots.find((snapshot) => snapshot.source_id === source && snapshot.current);
+  const receiver = endpoint?.native_route ? `BackupFabric / ${endpoint.native_route}` : label(endpoint?.receiver_id || "Dedicated receiver");
+  const descriptors = {
+    BACKUP: { route: `${source ? label(source) : "Source"} → new backup → ${receiver}`, button: native ? "Create backup and receive" : "Create native backup" },
+    ARCHIVE: { route: `${source ? label(source) : "Source"} / latest native backup → ${receiver}`, button: "Receive existing backup" },
+    VERIFY: { route: `${source ? label(source) : "Source"} / current ↔ ${receiver} / current`, button: "Verify received backup" },
+    COLLECT: { route: `${receiver} / full history → BackupFabric retained archive`, button: "Save retained history" },
+  };
+  document.querySelector("#backup-context").textContent = `${descriptors[action].route}\nReceiver current: ${selected ? `${selected.timestamp} · ${selected.version}` : "Not discovered"}`;
+  document.querySelector("#backup-submit").textContent = descriptors[action].button;
+  document.querySelector("#backup-submit").disabled = !source || !liveEnabled || document.querySelector("#backup-form").dataset.busy === "true";
+  const pauseRequired = ["VERIFY", "COLLECT"].includes(action);
+  document.querySelector("#backup-quiesced").hidden = !pauseRequired;
+  document.querySelector("#backup-form").elements.quiesced.required = pauseRequired;
   document.querySelector("#backup-approval").textContent = source ? `${action} ${source}` : "Select a source to see its approval phrase.";
   const target = document.querySelector("#restore-target").value;
   document.querySelector("#restore-approval").textContent = target ? `STAGE ${target}` : "Select a target to see its approval phrase.";
+  collectionOptions();
 }
 
 function table(headers, rows) {
@@ -80,9 +108,13 @@ async function refresh() {
     const [status, appliances, backups, capabilities] = await Promise.all([
       api("/health"), api("/appliances"), api("/backups"), api("/live/capabilities"),
     ]);
-    const [endpoints, jobs] = capabilities.enabled
-      ? await Promise.all([api("/live/endpoints"), api("/live/jobs")]) : [[], []];
-    state = { appliances, endpoints, jobs };
+    if (capabilities.native_push) {
+      const detection = await api("/live/reconcile", "POST", {});
+      if (detection.problems.length) notice(`Receiver discovery: ${detection.problems.join("; ")}`, true);
+    }
+    const [endpoints, jobs, snapshots] = capabilities.enabled
+      ? await Promise.all([api("/live/endpoints"), api("/live/jobs"), api("/live/snapshots")]) : [[], [], []];
+    state = { appliances, endpoints, jobs, snapshots };
     liveEnabled = capabilities.enabled;
     health.textContent = `${status.status} · ${status.version}`;
     health.classList.add("ok");
@@ -92,19 +124,36 @@ async function refresh() {
     document.querySelector("#backup-count").textContent = jobs.filter((j) => j.state === "collected_unverified").length;
     document.querySelector("#qualified-count").textContent = backups.filter((b) => b.state === "restore_qualified").length;
     document.querySelector("#appliances").innerHTML = table(
-      ["Name", "Host", "Volume", "SSH role", "Receiver"],
+      ["Name", "Host", "Appliance UUID", "Role", "SSH port", "Control credential"],
       appliances.map((a) => {
         const endpoint = endpoints.find((e) => e.appliance_id === a.id);
-        return [a.name, a.hostname, a.volume_id, endpoint?.role || "Not configured", endpoint?.receiver_id ? label(endpoint.receiver_id) : "—"];
+        return [a.name, a.hostname, endpoint?.native_source_uuid || a.appliance_uuid || "Unknown", endpoint?.role || "Not configured",
+          endpoint?.port || "—", endpoint?.key_ref || "Not configured"];
+      }),
+    );
+    document.querySelector("#topology").innerHTML = table(
+      ["Source", "Receiver", "Delivery", "Current snapshot", "Retention"],
+      endpoints.filter((endpoint) => endpoint.role === "source").map((endpoint) => {
+        const current = snapshots.find((snapshot) => snapshot.source_id === endpoint.appliance_id && snapshot.current);
+        return [label(endpoint.appliance_id), endpoint.native_route ? `BackupFabric / ${endpoint.native_route}` : label(endpoint.receiver_id),
+          endpoint.collection_mode === "native_push" ? "Isolated native push · SSH 122" : "Dedicated GHES receiver",
+          current ? `${current.timestamp} · ${current.version}` : "Not discovered", current?.retention_state || "Unknown"];
       }),
     );
     document.querySelector("#backups").innerHTML = table(
       ["Timestamp", "Source", "Provider", "State"],
       backups.map((b) => [b.native_timestamp, label(b.appliance_id), b.provider, b.state]),
     );
+    document.querySelector("#native-snapshots").innerHTML = table(
+      ["Source", "Receiver route", "Timestamp", "GHES version", "Current", "State / issue", "Retention"],
+      snapshots.map((snapshot) => [label(snapshot.source_id), snapshot.route, snapshot.timestamp, snapshot.version,
+        snapshot.current ? "Yes" : "No", snapshot.problem || snapshot.state,
+        ({ pending_collection: "Pending collection", retained_unverified: "Retained (unqualified)", not_eligible: "Not eligible" })[snapshot.retention_state] || "Unknown"]),
+    );
     document.querySelector("#jobs").innerHTML = table(
       ["Action / source", "State", "Phase", "Evidence / next steps"],
-      jobs.map((j) => [`${j.request.action} · ${label(j.request.source_id)}`, j.state, j.phase, j.message || j.id]),
+      jobs.map((j) => [`${operationLabel(j.request.action)} · ${label(j.request.source_id)}`, j.state, j.phase,
+        `${j.native_snapshot ? `${j.native_snapshot.timestamp} ${j.native_snapshot.version} · ` : ""}${j.message || j.id}`]),
     );
     workflowOptions();
   } catch (error) {
@@ -135,19 +184,6 @@ function bindForm(id, action) {
   });
 }
 
-bindForm("register-form", async (form, data) => {
-  const value = await api("/appliances", "POST", data);
-  form.reset();
-  notice(`Registered ${value.name}. Configure its SSH profile next.`);
-});
-bindForm("endpoint-form", async (_form, data) => {
-  const appliance = state.appliances.find((a) => a.id === data.appliance_id);
-  if (!appliance) throw new Error("Select a registered appliance.");
-  const value = { ...data, host: appliance.hostname, port: Number(data.port) };
-  if (value.role !== "source") delete value.receiver_id;
-  await api(`/live/endpoints/${value.appliance_id}`, "PUT", value);
-  notice("SSH profile saved. Run preflight before starting operations.");
-});
 bindForm("preflight-form", async (_form, data) => {
   const value = await api(`/live/endpoints/${data.endpoint_id}/preflight`, "POST", {});
   document.querySelector("#preflight-result").textContent = `${value.evidence}\n${value.warning}`;
@@ -191,15 +227,6 @@ document.querySelector("#restore-source").addEventListener("change", collectionO
 document.querySelector("#restore-collection").addEventListener("change", () => {
   const selected = state.jobs.find((j) => j.id === document.querySelector("#restore-collection").value);
   document.querySelector("#restore-timestamp").value = selected?.request.timestamp || "";
-});
-document.querySelector("#endpoint-appliance").addEventListener("change", () => {
-  const e = state.endpoints.find((value) => value.appliance_id === document.querySelector("#endpoint-appliance").value);
-  if (!e) return;
-  const form = document.querySelector("#endpoint-form");
-  form.elements.role.value = e.role;
-  form.elements.port.value = e.port;
-  form.elements.key_ref.value = e.key_ref;
-  form.elements.receiver_id.value = e.receiver_id || "";
 });
 
 async function initialize() {

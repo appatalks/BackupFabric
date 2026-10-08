@@ -1,0 +1,11 @@
+[
+  {
+    "name": "production-east",
+    "hostname": "source-east.example.com",
+    "volume_id": "backup-volume-east",
+    "appliance_uuid": "11111111-1111-1111-1111-111111111111",
+    "key": "control_east",
+    "version": "v3.21.7",
+    "route": "tenant-east"
+  }
+]

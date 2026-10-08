@@ -17,15 +17,16 @@ import (
 )
 
 type Service struct {
-	Store       *Store
-	Transport   Transport
-	ArchiveRoot string
-	Logger      *slog.Logger
-	ctx         context.Context
-	cancel      context.CancelFunc
-	mu          sync.Mutex
-	busy        bool
-	wg          sync.WaitGroup
+	Store           *Store
+	Transport       Transport
+	ArchiveRoot     string
+	Logger          *slog.Logger
+	ctx             context.Context
+	cancel          context.CancelFunc
+	mu              sync.Mutex
+	busy            bool
+	wg              sync.WaitGroup
+	nativeReceivers map[string]NativeReceiver
 }
 
 func NewService(store *Store, root, secrets string, logger *slog.Logger, runner Runner) (*Service, error) {
@@ -63,6 +64,13 @@ func (s *Service) SaveEndpoint(ctx context.Context, e Endpoint) error {
 	if s.busy {
 		return fmt.Errorf("cannot edit endpoints during a live operation")
 	}
+	if e.CollectionMode == "native_push" {
+		receiver, err := s.nativeReceiver(e)
+		if err != nil {
+			return err
+		}
+		e.NativeRoute, e.NativeSourceUUID = receiver.Route, receiver.SourceUUID
+	}
 	return s.Store.SaveEndpoint(ctx, e)
 }
 
@@ -73,6 +81,17 @@ func (s *Service) Preflight(ctx context.Context, id string) (Preflight, error) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	if e.CollectionMode == "native_push" {
+		s.mu.Lock()
+		var err error
+		if !s.busy {
+			_, err = s.reconcileNativeSource(ctx, e)
+		}
+		s.mu.Unlock()
+		if err != nil {
+			return Preflight{}, fmt.Errorf("native observation pre-check: %w", err)
+		}
+	}
 	return s.Transport.Preflight(ctx, e)
 }
 
@@ -97,6 +116,13 @@ func (s *Service) Start(ctx context.Context, r Request) (Job, error) {
 		if r.Confirmation != "BACKUP "+r.SourceID {
 			return Job{}, fmt.Errorf("type BACKUP followed by the selected source ID")
 		}
+	case "archive", "verify":
+		if source.CollectionMode != "native_push" || r.Confirmation != strings.ToUpper(r.Action)+" "+r.SourceID {
+			return Job{}, fmt.Errorf("native push requires the matching ARCHIVE or VERIFY source approval")
+		}
+		if r.Action == "verify" && !r.Quiesced {
+			return Job{}, fmt.Errorf("pause source and receiver writers before checksum verification")
+		}
 	case "collect":
 		if !r.Quiesced || r.Confirmation != "COLLECT "+r.SourceID {
 			return Job{}, fmt.Errorf("confirm COLLECT source ID and that source backup/pruning and receiver remote sync are paused and complete")
@@ -108,6 +134,12 @@ func (s *Service) Start(ctx context.Context, r Request) (Job, error) {
 		}
 		if target.Role != "restore" || target.ApplianceID == source.ApplianceID || target.ApplianceID == source.ReceiverID {
 			return Job{}, fmt.Errorf("target must be a separately registered restore appliance")
+		}
+		if source.CollectionMode == "native_push" {
+			receiver, err := s.nativeReceiver(source)
+			if err != nil || strings.EqualFold(target.Host, receiver.DestinationHost) {
+				return Job{}, fmt.Errorf("native receiver host cannot be a restore target")
+			}
 		}
 		collection, err := s.Store.Job(ctx, r.CollectionID)
 		if err != nil {
@@ -124,6 +156,11 @@ func (s *Service) Start(ctx context.Context, r Request) (Job, error) {
 		}
 	default:
 		return Job{}, fmt.Errorf("unknown action")
+	}
+	if source.CollectionMode == "native_push" {
+		if _, err := s.reconcileNativeSource(ctx, source); err != nil {
+			return Job{}, fmt.Errorf("native observation pre-check: %w", err)
+		}
 	}
 	settings, err := s.Store.Settings(ctx)
 	if err != nil {
@@ -167,6 +204,9 @@ func (s *Service) phase(ctx context.Context, job *Job, phase string) error {
 }
 
 func (s *Service) execute(ctx context.Context, job *Job, source Endpoint, settings Settings) (string, string, error) {
+	if source.CollectionMode == "native_push" && job.Request.Action != "stage" {
+		return s.executeNative(ctx, job, source, settings)
+	}
 	switch job.Request.Action {
 	case "backup":
 		if _, err := s.Transport.Preflight(ctx, source); err != nil {

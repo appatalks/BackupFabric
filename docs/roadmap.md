@@ -6,11 +6,56 @@
 - Explicit appliance and volume registration
 - Storage-provider interface and deterministic development adapter
 - Synthetic multi-source filesystem tests
-- Guided GUI registration, SSH profiles, settings, and restore-staging wizard
+- Read-only appliance/topology GUI, approved operations, settings, and restore staging
 - Experimental dedicated-receiver SSH/rsync workflows with explicit approvals
 - Durable live operation journal and fail-closed ownership checks
 
+## Portable deployment
+
+Recommended baseline: Ubuntu 24.04 LTS. The initial packaging goal is Linux
+amd64 and arm64; qualification is required for each distribution/architecture.
+
+- Publish versioned prebuilt control-plane binaries and multi-architecture
+	receiver/control-plane images with checksums, provenance, and image review.
+	Do not require customers to install Go or build from source.
+- Provide one idempotent initialization workflow with a non-mutating check
+	mode and explicit approval before host changes. Keep deployment inputs and
+	credentials outside the source tree.
+- Detect architecture, supported container engine, init system, free capacity,
+	filesystem links/ownership/ACL/xattrs, persistent mounts, and existing SSH
+	listeners. Fail clearly on unsupported combinations rather than relaxing
+	metadata or isolation checks.
+- Make Docker Compose optional for the guided install. Native-push isolation
+	currently requires Docker Engine; support for another runtime requires a
+	tested broker adapter, not a renamed executable.
+- Provision the non-root control plane separately from the restricted host
+	broker and per-source receivers. Retain the single external SSH port 122,
+	verified operator access, and loopback-only management until authentication
+	and TLS are implemented.
+- Test persistent mounts, boot ordering, upgrades/rollback, identity ownership,
+	and trusted source enrollment on clean Ubuntu, then Debian and RHEL-family
+	hosts including SELinux/firewall differences. Never format disks, overwrite
+	keys, or replace an occupied SSH listener without explicit approval.
+- Provide optional native systemd packaging for the control plane. Embedded
+	Linux, non-systemd hosts, rootless engines, and alternative runtimes are
+	separate unqualified tracks, not advertised as universally supported.
+
+The automated installer, released multi-architecture artifacts, and broad
+distribution certification are planned work, not implemented capabilities.
+
 ## Provider prototype
+
+Priority design: [independent recovery retention](adr/0004-independent-recovery-retention.md).
+The operator has not selected a protected-storage backend. Keep native push and
+platform snapshots complementary; defer Actions external-storage coverage and
+appliance-side restore setup from receiver admission.
+
+- Select independent recovery storage and separate writer, retention-admin,
+	and recovery-reader authority; prove protection with disposable fixtures.
+- Distinguish receipt, comparison, local retention, independently protected
+	generations, and successful restore qualification in evidence and UI.
+- Validate recovery retrieval/catalog reconstruction without the original host,
+	then complete seeded per-source GHES restore rehearsals and record RPO/RTO.
 
 - Implement one real provider snapshot/clone adapter
 - Qualify the pinned GHES SSH client and capture authoritative completion evidence

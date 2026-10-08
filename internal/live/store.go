@@ -2,6 +2,7 @@ package live
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -52,13 +53,13 @@ func (s *Store) SaveEndpoint(ctx context.Context, e Endpoint) error {
 		if err := json.Unmarshal([]byte(oldConfig), &old); err != nil {
 			return err
 		}
-		if old.Role != e.Role || old.Host != e.Host || old.ReceiverID != e.ReceiverID {
+		if old.Role != e.Role || old.Host != e.Host || old.ReceiverID != e.ReceiverID || old.CollectionMode != e.CollectionMode || old.NativeRoute != e.NativeRoute || old.NativeSourceUUID != e.NativeSourceUUID {
 			return fmt.Errorf("endpoint host, role, and receiver mapping are immutable; register a new appliance")
 		}
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	if e.Role == "source" {
+	if e.Role == "source" && e.CollectionMode != "native_push" {
 		var role string
 		if err := tx.QueryRowContext(ctx, "SELECT role FROM live_endpoints WHERE appliance_id=?", e.ReceiverID).Scan(&role); err != nil {
 			return fmt.Errorf("receiver must already have a registered SSH profile: %w", err)
@@ -152,6 +153,49 @@ func (s *Store) SaveJob(ctx context.Context, j Job) error {
 INSERT INTO live_jobs(id,state,config) VALUES(?,?,?)
 ON CONFLICT(id) DO UPDATE SET state=excluded.state,config=excluded.config`, j.ID, j.State, string(raw))
 	return err
+}
+
+func (s *Store) ObserveNativeSnapshot(ctx context.Context, snapshot NativeSnapshot) (bool, error) {
+	if snapshot.State != "received_unverified" || !validTimestamp(snapshot.Timestamp) ||
+		!idPattern.MatchString(snapshot.SourceID) || snapshot.SourceID[:4] != "app_" ||
+		!nativeVersion.MatchString(snapshot.Version) || !nativeUUID.MatchString(snapshot.UUID) || !refPattern.MatchString(snapshot.Route) {
+		return false, fmt.Errorf("only valid native snapshot observations can be journaled")
+	}
+	fingerprint := sha256.Sum256([]byte(snapshot.SourceID + "\x00" + snapshot.Timestamp))
+	id := fmt.Sprintf("job_%x", fingerprint[:16])
+	now := time.Now().UTC()
+	job := Job{
+		ID: id, Request: Request{Action: "discover", SourceID: snapshot.SourceID, Timestamp: snapshot.Timestamp},
+		State: "received_unverified", Phase: "observed", NativeSnapshot: &snapshot,
+		Message:   "Snapshot discovered on its isolated receiver. Observation time is not transfer time; transfer origin/completion, checksums, retention, and restore qualification are not inferred.",
+		CreatedAt: now, UpdatedAt: now,
+	}
+	raw, err := json.Marshal(job)
+	if err != nil {
+		return false, err
+	}
+	result, err := s.db.ExecContext(ctx, "INSERT INTO live_jobs(id,state,config) VALUES(?,?,?) ON CONFLICT(id) DO NOTHING", id, job.State, string(raw))
+	if err != nil {
+		return false, err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if count == 1 {
+		return true, nil
+	}
+	existing, err := s.Job(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	previous := existing.NativeSnapshot
+	if existing.Request.Action != "discover" || previous == nil || previous.SourceID != snapshot.SourceID ||
+		previous.Timestamp != snapshot.Timestamp || previous.UUID != snapshot.UUID ||
+		previous.Version != snapshot.Version || previous.Route != snapshot.Route {
+		return false, fmt.Errorf("previously observed snapshot identity/version changed; inspect receiver history")
+	}
+	return false, nil
 }
 
 func (s *Store) Job(ctx context.Context, id string) (Job, error) {

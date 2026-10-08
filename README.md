@@ -55,9 +55,35 @@ path is exposed. See [the feasibility analysis](docs/architecture/feasibility.md
 - Guided GUI setup, persistent transfer settings, dedicated receiver mappings,
   and explicitly approved live SSH/rsync operations
 - Durable live operation journal; native restore execution remains manual
+- Experimental isolated native-push inventory with per-snapshot identity/version,
+  approved archive/checksum operations, and retained histories
 
 Collection success means only that a storage snapshot was recorded. It does
 not mean that a backup is restore-qualified.
+
+## Deployment direction
+
+Ubuntu 24.04 LTS is the recommended host baseline. The goal is a repeatable
+Linux installation with deployment-provided storage, identities, and keys,
+not a dependency on the appliances used during development.
+
+The control plane can run as a Go binary or container. The current experimental
+multi-source native-push gateway requires Docker Engine for per-source receiver
+isolation. A container-free gateway is not implemented. Receiver containers
+provide consistent Linux tools across host distributions; they do not remove
+host kernel, storage, architecture, or security-policy requirements.
+
+Planned packaging includes prebuilt Linux amd64/arm64 binaries and matching
+receiver images, plus one initialization workflow for prerequisite checks,
+isolated storage, trusted key enrollment, SSH 122, and service installation.
+Customers should not need Go or build images during routine installation.
+These release artifacts and the automated installer are not available yet.
+
+Distribution/architecture support must be verified, not inferred from being
+Linux. The intended first qualification targets are Ubuntu LTS, followed by
+Debian and RHEL-family hosts. Minimal/embedded distributions, rootless engines,
+alternative container runtimes, and non-systemd startup remain unqualified.
+See [the roadmap](docs/roadmap.md) for the deployment work.
 
 ## Build and test
 
@@ -105,6 +131,33 @@ The supplied configuration uses Linux host networking while retaining the
 application's loopback-only binding. See the
 [container deployment guide](docs/deployment/docker.md).
 
+### Remote GUI access over SSH
+
+For a host configured with operator SSH access on port 122, run this on your
+workstation, replacing `backupfabric.example.com` with your host:
+
+```bash
+ssh -N \
+  -L 127.0.0.1:8088:127.0.0.1:8080 \
+  -o StrictHostKeyChecking=yes \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 \
+  -p122 admin@backupfabric.example.com
+```
+
+Independently verify and enroll the host's SSH key before connecting. Use an
+authorized operator key that permits forwarding to `127.0.0.1:8080`; backup
+source keys must not permit forwarding.
+
+Open **http://127.0.0.1:8088** and keep the SSH session running. Closing it
+closes GUI access; rerun the command to reconnect. Local port `8088` can be
+changed if occupied, including by an existing tunnel. Remote port `8080` must
+match the service's loopback listener.
+
+Only SSH port 122 needs external access. The current unauthenticated API must
+remain bound to `127.0.0.1`; do not expose port 8080 to the network. This example
+contains no deployment-specific hostname, credentials, or appliance identity.
+
 ### Experimental live GHES workflows
 
 The GUI supports SSH preflight, running a native backup on a registered source,
@@ -114,6 +167,11 @@ read-only. These integrations have not been qualified on real GHES; metadata
 permission failures are explicit and never silently relaxed.
 
 See [live workflow setup and limitations](docs/deployment/live-workflows.md).
+
+The two-source lab exposes isolated native-push inventory and explicit
+operations through the GUI. Gateway provisioning, persistent storage, and
+restore qualification remain separate requirements; this is not production
+receiver compatibility.
 
 Generate mock backup trees:
 

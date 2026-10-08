@@ -16,8 +16,9 @@ import (
 func (s *Server) liveRoutes(mux *http.ServeMux, service *live.Service) {
 	mux.HandleFunc("GET /api/v1/live/capabilities", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"enabled": service != nil,
-			"warning": "Experimental SSH/rsync workflows. Native remote archives require a dedicated GHES receiver per source. Native restore execution is manual.",
+			"enabled":     service != nil,
+			"native_push": service != nil && service.NativeEnabled(),
+			"warning":     "Experimental workflows. Native-push routes are administrator-provisioned per source on port 122. Arrival and checksums do not confer restore qualification. Native restore execution is manual.",
 		})
 	})
 	if service == nil {
@@ -71,6 +72,19 @@ func (s *Server) liveRoutes(mux *http.ServeMux, service *live.Service) {
 	})
 	handle("GET /api/v1/live/jobs", func(w http.ResponseWriter, r *http.Request) {
 		value, err := service.Store.Jobs(r.Context())
+		s.liveResult(w, r, value, err, http.StatusOK)
+	})
+	handle("GET /api/v1/live/snapshots", func(w http.ResponseWriter, r *http.Request) {
+		value, err := service.NativeSnapshots(r.Context())
+		s.liveResult(w, r, value, err, http.StatusOK)
+	})
+	handle("POST /api/v1/live/reconcile", func(w http.ResponseWriter, r *http.Request) {
+		var input struct{}
+		if err := decodeJSON(r, &input); err != nil {
+			writeProblem(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		value, err := service.ReconcileNativeSnapshots(r.Context())
 		s.liveResult(w, r, value, err, http.StatusOK)
 	})
 	handle("POST /api/v1/live/jobs", func(w http.ResponseWriter, r *http.Request) {

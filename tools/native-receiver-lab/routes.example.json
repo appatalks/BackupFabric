@@ -1,0 +1,4 @@
+{
+  "tenant-east": {"container": "receiver-east", "user": "10001:10001"},
+  "tenant-west": {"container": "receiver-west", "user": "10001:10001"}
+}
