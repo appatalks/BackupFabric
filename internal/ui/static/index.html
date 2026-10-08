@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BackupFabric</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <div>
+      <span class="eyebrow">LINUX CONTROL PLANE</span>
+      <h1>BackupFabric</h1>
+      <p>Independent backup orchestration and storage inventory</p>
+    </div>
+    <div id="health" class="badge">Connecting</div>
+  </header>
+  <main>
+    <div id="notice" role="status" aria-live="polite"></div>
+    <section class="summary">
+      <article><strong id="appliance-count">-</strong><span>Appliances</span></article>
+      <article><strong id="backup-count">-</strong><span>Collected histories (unverified)</span></article>
+      <article><strong id="qualified-count">-</strong><span>Restore-qualified</span></article>
+    </section>
+    <nav aria-label="Management workflows" class="tabs">
+      <button data-tab="overview" aria-pressed="true">Overview</button>
+      <button data-tab="setup" aria-pressed="false">Appliances &amp; SSH</button>
+      <button data-tab="backup" aria-pressed="false">Backup &amp; collection</button>
+      <button data-tab="restore" aria-pressed="false">Restore staging</button>
+      <button data-tab="settings" aria-pressed="false">Settings</button>
+    </nav>
+    <div id="live-warning" class="warning-box"></div>
+    <div data-panel="overview">
+    <section class="panel">
+      <div class="panel-title">
+        <div><span class="eyebrow">SOURCES</span><h2>Registered appliances</h2></div>
+        <button id="refresh">Refresh</button>
+      </div>
+      <div id="appliances" class="table-wrap"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-title">
+        <div><span class="eyebrow">CATALOG</span><h2>Backup inventory</h2></div>
+      </div>
+      <div id="backups" class="table-wrap"></div>
+    </section>
+    </div>
+    <div data-panel="setup" hidden>
+      <section class="panel">
+        <h2>Register an appliance</h2>
+        <p>Register each source, its dedicated GHES receiver, and each restore target separately. Configure native remote archives on GHES using GitHub's documentation.</p>
+        <form id="register-form">
+          <label>Name<input name="name" required maxlength="63" placeholder="receiver-a"></label>
+          <label>Hostname / IPv4<input name="hostname" required placeholder="receiver-a.example.com"></label>
+          <label>Dedicated volume identifier<input name="volume_id" required placeholder="receiver-volume-a"></label>
+          <label>GHES appliance UUID (optional)<input name="appliance_uuid"></label>
+          <button type="submit">Register appliance</button>
+        </form>
+      </section>
+      <section class="panel">
+        <h2>Configure SSH and topology</h2>
+        <p>Register the receiver's SSH profile first, then map its source. Each receiver may belong to only one source. Keys and independently verified host keys must be mounted by the server administrator; never paste private keys here.</p>
+        <form id="endpoint-form">
+          <label>Registered appliance<select name="appliance_id" id="endpoint-appliance" required></select></label>
+          <label>Role<select name="role" id="endpoint-role"><option value="receiver">Dedicated receiver</option><option value="source">Source</option><option value="restore">Restore target</option></select></label>
+          <label>SSH port<input name="port" type="number" min="1" max="65535" value="122" required></label>
+          <label>SSH key reference<input name="key_ref" required pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,63}" placeholder="receiver_a"></label>
+          <label>Dedicated receiver (sources only)<select name="receiver_id" id="endpoint-receiver"></select></label>
+          <button type="submit">Save SSH profile</button>
+        </form>
+        <p>Login is fixed to <code>admin</code>. Host, role, and receiver mapping cannot be rebound after registration. No sudo wrapper or GHES configuration modifications are performed.</p>
+      </section>
+      <section class="panel">
+        <h2>Connection and storage preflight</h2>
+        <form id="preflight-form">
+          <label>SSH endpoint<select name="endpoint_id" id="preflight-endpoint" required></select></label>
+          <button type="submit">Run read-only checks</button>
+        </form>
+        <pre id="preflight-result" aria-live="polite">No checks run yet.</pre>
+      </section>
+    </div>
+    <div data-panel="backup" hidden>
+      <section class="panel">
+        <h2>Native backup / receiver collection</h2>
+        <p>Run a backup on the source, then separately collect its receiver after native remote synchronization completes. BackupFabric cannot currently prove remote-sync completion.</p>
+        <form id="backup-form">
+          <label>Source<select name="source_id" id="backup-source" required></select></label>
+          <label>Action<select name="action" id="backup-action"><option value="backup">Run native ghe-backup</option><option value="collect">Collect complete receiver history using rsync</option></select></label>
+          <label class="check"><input name="quiesced" type="checkbox"> For collection: I confirmed native receiver sync completed and paused source backup/pruning and receiver writers for the whole transfer.</label>
+          <label>Type the approval phrase shown below<input name="confirmation" required autocomplete="off"></label>
+          <code id="backup-approval"></code>
+          <button type="submit">Approve and start</button>
+        </form>
+      </section>
+    </div>
+    <div data-panel="restore" hidden>
+      <section class="panel">
+        <h2>Restore staging wizard</h2>
+        <p>This transfers the complete retained history to an empty target backup root. It does not execute <code>ghe-restore</code> or overwrite an existing history.</p>
+        <form id="restore-form">
+          <label>1. Source<select name="source_id" id="restore-source" required></select></label>
+          <label>2. Completed collection<select name="collection_id" id="restore-collection" required></select></label>
+          <label>3. Native restore timestamp<input name="timestamp" id="restore-timestamp" required pattern="[0-9]{8}T[0-9]{6}" placeholder="20261008T010203"></label>
+          <label>4. Dedicated restore target<select name="target_id" id="restore-target" required></select></label>
+          <label class="check"><input name="quiesced" type="checkbox" required> Target backup, pruning, remote-sync and restore writers are disabled for staging. The mounted backup root is empty.</label>
+          <label class="check"><input name="compatible_target" type="checkbox" required> I checked source/target GHES version compatibility and authorize experimental rsync staging.</label>
+          <label>5. Type the target approval phrase<input name="confirmation" required autocomplete="off"></label>
+          <code id="restore-approval"></code>
+          <button type="submit">Preflight, transfer, verify &amp; stage</button>
+        </form>
+        <p>Do not initialize/format the target disk. After staging, follow GitHub's native restore procedure and record a full restore rehearsal. Transfer checks are not recoverability checks.</p>
+      </section>
+    </div>
+    <div data-panel="settings" hidden>
+      <section class="panel">
+        <h2>Transfer settings</h2>
+        <form id="settings-form">
+          <label>Bandwidth limit (KiB/s; 0 = unlimited)<input name="bandwidth_kib" type="number" min="0" max="1048576" required value="0"></label>
+          <label>Operation timeout (minutes)<input name="timeout_minutes" type="number" min="1" max="1440" required value="120"></label>
+          <button type="submit">Save settings</button>
+        </form>
+        <p>Live operations run one at a time. No automatic retries, pruning, deletion, host-key enrollment, or native restore execution. Changed settings apply to future operations.</p>
+      </section>
+    </div>
+    <section class="panel">
+      <h2>Live operation history</h2>
+      <p>Persisted operation states and approval records. Interrupted operations require inspection before retrying; partial transfers are never usable collections.</p>
+      <div id="jobs" class="table-wrap"></div>
+    </section>
+    <p class="warning">Experimental GHES integration. Collected or staged does not mean restore-qualified. Only local trusted administrators may use this unauthenticated interface.</p>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

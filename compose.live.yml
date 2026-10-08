@@ -1,0 +1,24 @@
+services:
+  backupfabric:
+    command:
+      - serve
+      - --listen
+      - 127.0.0.1:8080
+      - --database
+      - /var/lib/backupfabric/backupfabric.db
+      - --archive-root
+      - /archives
+      - --ssh-secrets
+      - /run/secrets/backupfabric
+    volumes:
+      - type: bind
+        source: ${BACKUPFABRIC_ARCHIVES:?Set BACKUPFABRIC_ARCHIVES to an existing absolute archive directory}
+        target: /archives
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${BACKUPFABRIC_SSH_SECRETS:?Set BACKUPFABRIC_SSH_SECRETS to an existing absolute secret directory}
+        target: /run/secrets/backupfabric
+        read_only: true
+        bind:
+          create_host_path: false

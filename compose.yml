@@ -1,0 +1,18 @@
+services:
+  backupfabric:
+    build:
+      context: .
+    image: backupfabric:dev
+    network_mode: host
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - backupfabric-data:/var/lib/backupfabric
+
+volumes:
+  backupfabric-data:

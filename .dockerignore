@@ -1,0 +1,8 @@
+.git
+.github
+backupfabric
+backupfabric-mock
+var
+*.db
+*.db-shm
+*.db-wal
