@@ -1,5 +1,7 @@
 # BackupFabric
 
+![BackupFabric concept illustration showing multiple backup appliances feeding isolated storage through a central hub](docs/backupfabric-splash.png)
+
 A Linux backup hub for receiving, tracking, verifying, and retaining isolated
 backup histories. Built first for **GitHub Enterprise Server**; other producers,
 such as LAMP stacks, are a planned extension.
