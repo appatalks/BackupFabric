@@ -6,7 +6,9 @@ A Linux backup hub for receiving, tracking, verifying, and retaining isolated
 backup histories. Built first for **GitHub Enterprise Server**; other producers,
 such as LAMP stacks, are a planned extension.
 
-**Experimental:** not production-ready. A successful copy is not proof of recovery.
+> [!CAUTION]
+> BackupFabric is experimental software in early-stage development and is **not production-ready**.
+> Use only in non-production test environments. A successful backup copy is not proof of recovery.
 
 ## Quick start
 
